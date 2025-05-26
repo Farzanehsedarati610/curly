@@ -1,40 +1,41 @@
 const express = require("express");
 const axios = require("axios");
-const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 
 const OPENBANKING_URL = process.env.OPENBANKING_OAUTH_URL || "https://apisandbox.openbankproject.com";
-const CONSUMER_KEY = process.env.OPENBANKING_CONSUMER_KEY;
-const CONSUMER_SECRET = process.env.OPENBANKING_CONSUMER_SECRET;
+const JWS_PRIVATE_KEY = JSON.parse(process.env.OAUTH2_JWK_PRIVATE_KEY);
+const JWS_ALG = process.env.OAUTH2_JWS_ALG || "ES512";
 const REDIRECT_URI = process.env.REDIRECT_URI || "https://curl-6yum.onrender.com/callback";
 
-function generateSignature(method, url, timestamp, nonce) {
-    const baseString = `${method}&${encodeURIComponent(url)}&oauth_consumer_key=${CONSUMER_KEY}&oauth_nonce=${nonce}&oauth_signature_method=HMAC-SHA256&oauth_timestamp=${timestamp}&oauth_callback=${encodeURIComponent(REDIRECT_URI)}`;
-    return crypto.createHmac("sha256", CONSUMER_SECRET).update(baseString).digest("base64");
+// 🔹 Generate a JWS Token for OAuth2 Authentication
+function generateJWS() {
+    const payload = {
+        iss: JWS_PRIVATE_KEY.kid,  // Key ID
+        aud: OPENBANKING_URL,
+        exp: Math.floor(Date.now() / 1000) + 300, // Expires in 5 minutes
+        iat: Math.floor(Date.now() / 1000)
+    };
+
+    return jwt.sign(payload, JWS_PRIVATE_KEY, { algorithm: JWS_ALG });
 }
 
 // 🔹 Root Route for API Status
 app.get("/", (req, res) => {
-    res.json({ success: true, message: "API is running!" });
+    res.json({ success: true, message: "API is running with JWS authentication!" });
 });
 
-// 🔹 Authentication Route (OAuth 1.0a)
+// 🔹 Authentication Route (OAuth2 with JWS-ES512)
 app.post("/auth", async (req, res) => {
     try {
-        const timestamp = Math.floor(Date.now() / 1000).toString();
-        const nonce = crypto.randomBytes(16).toString("hex");
-        const signature = generateSignature("POST", `${OPENBANKING_URL}/oauth/initiate`, timestamp, nonce);
+        const jwsToken = generateJWS();
 
-        const response = await axios.post(`${OPENBANKING_URL}/oauth/initiate`, {
-            oauth_signature_method: "HMAC-SHA256",
-            oauth_signature: signature,
-            oauth_consumer_key: CONSUMER_KEY,
-            oauth_callback: REDIRECT_URI,
-            oauth_timestamp: timestamp,
-            oauth_nonce: nonce
+        const response = await axios.post(`${OPENBANKING_URL}/oauth2/authenticate`, {
+            grant_type: "client_credentials",
+            assertion: jwsToken
         });
 
         res.json({ success: true, access_token: response.data.access_token });
