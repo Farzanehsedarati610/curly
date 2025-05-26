@@ -23,6 +23,10 @@ app.post("/auth", async (req, res) => {
     }
 });
 
+app.get("/", (req, res) => {
+    res.json({ success: true, message: "API is running!" });
+});
+
 // 🔹 Retrieve Accounts (No Token, Uses API Key & Secret)
 app.get("/accounts", async (req, res) => {
     try {
