@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transfer Service</title>
+</head>
+<body>
+    <h1>Send a Transfer Request</h1>
+    <button onclick="sendTransfer()">Send Transfer</button>
+
+    <script>
+        function sendTransfer() {
+            fetch("https://your-render-service.onrender.com/transfer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    routing_account: "283977688",
+                    destination_account: "0000339715",
+                    transfers: []
+                })
+            }).then(response => response.json())
+            .then(data => console.log("Response:", data))
+            .catch(error => console.error("Error:", error));
+        }
+    </script>
+</body>
+</html>
+
