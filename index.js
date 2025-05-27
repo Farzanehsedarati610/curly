@@ -6,12 +6,12 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 
-const OPENBANKING_URL = process.env.OPENBANKING_OAUTH_URL || "https://apisandbox.openbankproject.com";
+const OPENBANKING_URL = process.env.OPENBANKING_OAUTH_URL;
 const JWS_PRIVATE_KEY = JSON.parse(process.env.OAUTH2_JWK_PRIVATE_KEY);
 const JWS_ALG = process.env.OAUTH2_JWS_ALG || "ES512";
 const REDIRECT_URI = process.env.REDIRECT_URI || "https://curl-6yum.onrender.com/callback";
 
-// 🔹 Generate a JWS Token for OAuth2 Authentication
+// 🔹 Generate JWS for Authentication
 function generateJWS() {
     const payload = {
         iss: JWS_PRIVATE_KEY.kid,  // Key ID
@@ -28,7 +28,7 @@ app.get("/", (req, res) => {
     res.json({ success: true, message: "API is running with JWS authentication!" });
 });
 
-// 🔹 Authentication Route (OAuth2 with JWS-ES512)
+// 🔹 Authentication Route (JWS-ES512)
 app.post("/auth", async (req, res) => {
     try {
         const jwsToken = generateJWS();
@@ -38,21 +38,18 @@ app.post("/auth", async (req, res) => {
             assertion: jwsToken
         });
 
-        res.json({ success: true, access_token: response.data.access_token });
+        res.json({ success: true, api_access: response.data });
     } catch (error) {
         console.error("Authentication Error:", error.message);
         res.status(500).json({ error: "Authentication failed", details: error.response?.data || error.message });
     }
 });
 
-// 🔹 Retrieve Accounts (Authenticated)
+// 🔹 Retrieve Accounts (No Token Required)
 app.get("/accounts", async (req, res) => {
     try {
-        const token = req.headers.authorization?.split(" ")[1];
-        if (!token) return res.status(401).json({ error: "Missing access token" });
-
         const response = await axios.get(`${OPENBANKING_URL}/accounts`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { "JWS-Authorization": generateJWS() }
         });
 
         res.json(response.data);
@@ -62,12 +59,9 @@ app.get("/accounts", async (req, res) => {
     }
 });
 
-// 🔹 Money Transfer (Authenticated)
+// 🔹 Money Transfer (No Token Required)
 app.post("/transfer", async (req, res) => {
     try {
-        const token = req.headers.authorization?.split(" ")[1];
-        if (!token) return res.status(401).json({ error: "Missing access token" });
-
         const { routing_account, destination_account, amount } = req.body;
         if (!routing_account || !destination_account || !amount) {
             return res.status(400).json({ error: "Missing required transaction data" });
@@ -78,7 +72,7 @@ app.post("/transfer", async (req, res) => {
             destination_account,
             amount
         }, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { "JWS-Authorization": generateJWS() }
         });
 
         res.json({ success: true, transaction_id: response.data.transaction_id });
